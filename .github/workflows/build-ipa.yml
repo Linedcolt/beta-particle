@@ -9,7 +9,7 @@ jobs:
   build:
     # macOS 15 (Sequoia) ships Xcode 16+, which @bacons/apple-targets
     # requires. If a future Xcode/SDK bump is needed, try `macos-latest`.
-    runs-on: macos-15
+    runs-on: macos-26
 
     steps:
       - uses: actions/checkout@v4
