@@ -51,7 +51,7 @@ struct KeyboardThemeModel: Codable {
 // Must use the exact same App Group id as app.json and
 // targets/keyboard/expo-target.config.js.
 enum ThemeStore {
-    static let appGroup = "group.com.example.kbapp"
+    static let appGroup = "group.com.Linedcolt.kbapp"
     static let themeKey = "activeTheme" // matches THEME_KEY in themeStorage.ts
 
     static func loadActiveTheme() -> KeyboardThemeModel {
