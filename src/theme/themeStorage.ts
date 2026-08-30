@@ -52,23 +52,3 @@ export async function loadTheme(): Promise<KeyboardTheme> {
     return DEFAULT_THEME;
   }
 }
-
-// MARK: - Keychain sharing canary (temporary)
-//
-// Same idea as the earlier App Group canary, just over the new channel:
-// proves whether the app and the keyboard extension are actually reading/
-// writing the same keychain, independent of the theme JSON itself.
-const APP_CANARY_SERVICE = "com.Linedcolt.kbappv2.canaryFromApp";
-const KEYBOARD_CANARY_SERVICE = "com.Linedcolt.kbappv2.canaryFromKeyboard";
-
-/** Call from the RN app to write a fresh canary; returns the stamp written. */
-export async function writeAppCanary(): Promise<string> {
-  const stamp = new Date().toISOString();
-  await keychainSet(APP_CANARY_SERVICE, stamp);
-  return stamp;
-}
-
-/** Call from the RN app to see the last canary the keyboard extension wrote. */
-export async function readKeyboardCanary(): Promise<string | null> {
-  return keychainGet(KEYBOARD_CANARY_SERVICE);
-}

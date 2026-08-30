@@ -65,61 +65,6 @@ enum ThemeStore {
         }
         return (try? JSONDecoder().decode(KeyboardThemeModel.self, from: data)) ?? .fallback
     }
-
-    // TEMPORARY DIAGNOSTIC — remove once theming is confirmed working.
-    // Reports exactly where the read pipeline is failing, since a silent
-    // `.fallback` gives no signal on *why* it fell back:
-    //  - "no app group" -> UserDefaults(suiteName:) itself returned nil.
-    //    This means the App Group entitlement isn't actually active for
-    //    this signed/installed build (common after re-signing via
-    //    AltStore/SideStore if the App Group wasn't included in the
-    //    profile they generated).
-    //  - "no stored value" -> the suite opened fine, but nothing has ever
-    //    been written under this key from this exact installed app group
-    //    (e.g. the main app and the keyboard ended up with two different
-    //    app group containers, or nothing was saved yet).
-    //  - "decode failed: <raw>" -> a string WAS found, but JSONDecoder
-    //    couldn't turn it into KeyboardThemeModel. Shows the raw string so
-    //    you can see whether it's malformed, truncated, or shaped
-    //    differently than the Swift struct expects.
-    //  - "ok: <name>" -> everything worked; shows the theme's `name` field.
-    static func debugStatus() -> String {
-        guard let defaults = UserDefaults(suiteName: appGroup) else {
-            return "no app group"
-        }
-        guard let json = defaults.string(forKey: themeKey) else {
-            return "no stored value"
-        }
-        guard let data = json.data(using: .utf8) else {
-            return "decode failed: (bad utf8) \(json.prefix(80))"
-        }
-        do {
-            let decoded = try JSONDecoder().decode(KeyboardThemeModel.self, from: data)
-            return "ok: \(decoded.name)"
-        } catch {
-            return "decode failed: \(error) | raw: \(json.prefix(120))"
-        }
-    }
-
-    // MARK: - App Group sharing canary (temporary)
-    //
-    // Independent of the theme JSON entirely: proves whether this process
-    // and the RN app process are actually reading/writing the same
-    // physical UserDefaults container.
-    //
-    // Called every time the keyboard is shown. Writes a timestamp under
-    // "canaryFromKeyboard" (the app can read this via readKeyboardCanary()
-    // in themeStorage.ts), and reads back whatever the app last wrote under
-    // "canaryFromApp" (written via writeAppCanary() in the RN app).
-    static func writeCanaryAndReadApps() -> String {
-        guard let defaults = UserDefaults(suiteName: appGroup) else {
-            return "no app group"
-        }
-        let formatter = ISO8601DateFormatter()
-        defaults.set(formatter.string(from: Date()), forKey: "canaryFromKeyboard")
-        let appCanary = defaults.string(forKey: "canaryFromApp") ?? "(nothing from app yet)"
-        return "app canary: \(appCanary)"
-    }
 }
 
 // MARK: - Keychain-based storage (replacement channel)
@@ -138,10 +83,8 @@ enum ThemeStore {
 // iOS uses it as the default automatically for both add and query - so we
 // never need to know or hardcode the literal Team-ID-prefixed string here.
 enum KeychainStore {
-    // Must match the service names in themeStorage.ts exactly.
+    // Must match the service name in themeStorage.ts exactly.
     static let themeService = "com.Linedcolt.kbappv2.theme"
-    static let appCanaryService = "com.Linedcolt.kbappv2.canaryFromApp"
-    static let keyboardCanaryService = "com.Linedcolt.kbappv2.canaryFromKeyboard"
     static let account = "value" // constant; matches ACCOUNT in themeStorage.ts
 
     static func read(service: String) -> String? {
@@ -179,29 +122,6 @@ enum KeychainStore {
             return SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess
         }
         return false
-    }
-
-    /// Combined status line for the debug banner: theme read result, plus a
-    /// canary round-trip (writes a fresh keyboard-side timestamp, reads
-    /// back whatever the app last wrote).
-    static func debugStatusLine() -> String {
-        let themeStatus: String
-        if let json = read(service: themeService) {
-            if let data = json.data(using: .utf8),
-               let decoded = try? JSONDecoder().decode(KeyboardThemeModel.self, from: data) {
-                themeStatus = "keychain theme ok: \(decoded.name)"
-            } else {
-                themeStatus = "keychain theme: decode failed | raw: \(json.prefix(80))"
-            }
-        } else {
-            themeStatus = "keychain theme: no stored value"
-        }
-
-        let formatter = ISO8601DateFormatter()
-        write(formatter.string(from: Date()), service: keyboardCanaryService)
-        let appCanary = read(service: appCanaryService) ?? "(nothing from app yet)"
-
-        return "\(themeStatus) | app canary: \(appCanary)"
     }
 }
 
@@ -284,39 +204,15 @@ class KeyboardViewController: KeyboardInputViewController {
         setupKeyboardView { [weak self] controller in
             guard let self else { return AnyView(EmptyView()) }
             return AnyView(
-                VStack(spacing: 0) {
-                    // TEMPORARY DIAGNOSTIC BANNER — remove once theming works.
-                    // Tap into any text field with this build installed and
-                    // read what this says; it tells us exactly which stage
-                    // of the read pipeline is failing.
-                    // Red: old App Group channel (kept as a reference point -
-                    // expected to keep saying "no stored value" under
-                    // sideloading; remove once Keychain is confirmed working).
-                    Text("[App Group] " + ThemeStore.debugStatus())
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.white)
-                        .padding(4)
-                        .frame(maxWidth: .infinity)
-                        .background(Color.red)
-
-                    // Blue: new Keychain Sharing channel.
-                    Text("[Keychain] " + KeychainStore.debugStatusLine())
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.white)
-                        .padding(4)
-                        .frame(maxWidth: .infinity)
-                        .background(Color.blue)
-
-                    KeyboardView(
-                        state: self.state,
-                        services: self.services,
-                        buttonContent: { $0.view },
-                        buttonView: { $0.view },
-                        collapsedView: { $0.view },
-                        emojiKeyboard: { $0.view },
-                        toolbar: { $0.view }
-                    )
-                }
+                KeyboardView(
+                    state: self.state,
+                    services: self.services,
+                    buttonContent: { $0.view },
+                    buttonView: { $0.view },
+                    collapsedView: { $0.view },
+                    emojiKeyboard: { $0.view },
+                    toolbar: { $0.view }
+                )
                 .background(Color(UIColor(hex: theme.colors.background)))
             )
         }
