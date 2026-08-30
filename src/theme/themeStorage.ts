@@ -5,7 +5,7 @@ import { DEFAULT_THEME } from "./defaultTheme";
 // Must exactly match:
 //  - app.json -> expo.ios.entitlements["com.apple.security.application-groups"][0]
 //  - targets/keyboard/expo-target.config.js entitlements mirror
-export const APP_GROUP = "group.com.Linedcolt.kbapp";
+export const APP_GROUP = "group.com.Linedcolt.kbappv2";
 
 const THEME_KEY = "activeTheme";
 

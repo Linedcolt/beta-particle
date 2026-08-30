@@ -7,11 +7,11 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "bundleIdentifier": "com.Linedcolt.kbapp",
+      "bundleIdentifier": "com.Linedcolt.kbappv2",
       "supportsTablet": true,
       "entitlements": {
         "com.apple.security.application-groups": [
-          "group.com.Linedcolt.kbapp"
+          "group.com.Linedcolt.kbappv2"
         ]
       }
     },
