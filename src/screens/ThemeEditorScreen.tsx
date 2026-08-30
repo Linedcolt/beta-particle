@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { KeyboardTheme } from "../theme/types";
+import { DEFAULT_THEME } from "../theme/defaultTheme";
 import {
   saveTheme,
   loadTheme,
@@ -23,26 +24,31 @@ const HEIGHT_OPTIONS: KeyboardTheme["layout"]["keyboardHeight"][] = [
 ];
 
 export default function ThemeEditorScreen() {
-  // Initialize from whatever was last saved (falls back to DEFAULT_THEME
-  // internally if nothing has been saved yet), so re-entering the app
-  // shows your actual current theme instead of resetting the form.
-  const [theme, setTheme] = useState<KeyboardTheme>(() => loadTheme());
+  // Keychain access is async, so we can't load synchronously in useState
+  // the way the old App-Group-backed version did. Start from the default
+  // and swap in the real saved theme once it's loaded.
+  const [theme, setTheme] = useState<KeyboardTheme>(DEFAULT_THEME);
   const [savedAt, setSavedAt] = useState<string | null>(null);
 
-  // --- TEMPORARY: App Group sharing diagnostic ---
+  useEffect(() => {
+    loadTheme().then(setTheme);
+  }, []);
+
+  // --- TEMPORARY: Keychain sharing diagnostic ---
   const [appCanary, setAppCanary] = useState<string | null>(null);
   const [keyboardCanary, setKeyboardCanary] = useState<string | null>(null);
 
-  const runCanaryTest = () => {
-    setAppCanary(writeAppCanary());
-    setKeyboardCanary(readKeyboardCanary());
+  const runCanaryTest = async () => {
+    const stamp = await writeAppCanary();
+    setAppCanary(stamp);
+    setKeyboardCanary(await readKeyboardCanary());
   };
 
   const setColor = (key: keyof KeyboardTheme["colors"], value: string) =>
     setTheme((t) => ({ ...t, colors: { ...t.colors, [key]: value } }));
 
-  const handleSave = () => {
-    saveTheme(theme);
+  const handleSave = async () => {
+    await saveTheme(theme);
     setSavedAt(new Date().toLocaleTimeString());
   };
 
@@ -141,18 +147,18 @@ export default function ThemeEditorScreen() {
         keyboard and tap back into a text field) to see the new theme applied.
       </Text>
 
-      {/* --- TEMPORARY: App Group sharing diagnostic --- */}
+      {/* --- TEMPORARY: Keychain sharing diagnostic --- */}
       <View style={styles.debugBox}>
-        <Text style={styles.h2}>App Group sharing test</Text>
+        <Text style={styles.h2}>Keychain sharing test</Text>
         <Text style={styles.hint}>
           1. Tap the button below. 2. Switch to the keyboard (tap into any
-          text field, choose this keyboard). Its red debug banner should show
-          "app canary: {"<the stamp below>"}". 3. Come back here and tap the
-          button again - "Keyboard canary" should show a recent timestamp
-          the keyboard wrote when it last appeared.
+          text field, choose this keyboard). Its blue debug banner should show
+          "keychain app canary: {"<the stamp below>"}". 3. Come back here and
+          tap the button again - "Keyboard canary" should show a recent
+          timestamp the keyboard wrote when it last appeared.
         </Text>
         <Pressable style={styles.saveButton} onPress={runCanaryTest}>
-          <Text style={styles.saveButtonText}>Run App Group test</Text>
+          <Text style={styles.saveButtonText}>Run Keychain test</Text>
         </Pressable>
         <Text style={styles.savedNote}>
           App wrote: {appCanary ?? "(tap the button)"}

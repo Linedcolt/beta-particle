@@ -1,6 +1,7 @@
 import UIKit
 import KeyboardKit
 import SwiftUI
+import Security
 
 // MARK: - Theme model
 //
@@ -121,6 +122,89 @@ enum ThemeStore {
     }
 }
 
+// MARK: - Keychain-based storage (replacement channel)
+//
+// App Groups turned out not to be actually shared between this app and the
+// keyboard extension under AltStore/SideStore free-account sideloading -
+// confirmed via the canary above. Keychain Sharing is a different
+// mechanism (no capability to register in the Apple Developer portal, just
+// a matching entitlement tied to your Team ID), so we're trying it as a
+// second channel here.
+//
+// Deliberately no kSecAttrAccessGroup passed on either read or write below:
+// this target declares exactly one "keychain-access-groups" entry in its
+// entitlements (see targets/keyboard/expo-target.config.js), matching the
+// one entry in app.json for the main app. With only one group declared,
+// iOS uses it as the default automatically for both add and query - so we
+// never need to know or hardcode the literal Team-ID-prefixed string here.
+enum KeychainStore {
+    // Must match the service names in themeStorage.ts exactly.
+    static let themeService = "com.Linedcolt.kbappv2.theme"
+    static let appCanaryService = "com.Linedcolt.kbappv2.canaryFromApp"
+    static let keyboardCanaryService = "com.Linedcolt.kbappv2.canaryFromKeyboard"
+    static let account = "value" // constant; matches ACCOUNT in themeStorage.ts
+
+    static func read(service: String) -> String? {
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccount: account,
+            kSecReturnData: true,
+            kSecMatchLimit: kSecMatchLimitOne,
+        ]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess, let data = item as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    @discardableResult
+    static func write(_ value: String, service: String) -> Bool {
+        let data = Data(value.utf8)
+        let matchQuery: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccount: account,
+        ]
+
+        let updateStatus = SecItemUpdate(
+            matchQuery as CFDictionary,
+            [kSecValueData: data] as CFDictionary
+        )
+        if updateStatus == errSecSuccess { return true }
+
+        if updateStatus == errSecItemNotFound {
+            var addQuery = matchQuery
+            addQuery[kSecValueData] = data
+            return SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess
+        }
+        return false
+    }
+
+    /// Combined status line for the debug banner: theme read result, plus a
+    /// canary round-trip (writes a fresh keyboard-side timestamp, reads
+    /// back whatever the app last wrote).
+    static func debugStatusLine() -> String {
+        let themeStatus: String
+        if let json = read(service: themeService) {
+            if let data = json.data(using: .utf8),
+               let decoded = try? JSONDecoder().decode(KeyboardThemeModel.self, from: data) {
+                themeStatus = "keychain theme ok: \(decoded.name)"
+            } else {
+                themeStatus = "keychain theme: decode failed | raw: \(json.prefix(80))"
+            }
+        } else {
+            themeStatus = "keychain theme: no stored value"
+        }
+
+        let formatter = ISO8601DateFormatter()
+        write(formatter.string(from: Date()), service: keyboardCanaryService)
+        let appCanary = read(service: appCanaryService) ?? "(nothing from app yet)"
+
+        return "\(themeStatus) | app canary: \(appCanary)"
+    }
+}
+
 extension UIColor {
     convenience init(hex: String) {
         var s = hex.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -179,7 +263,16 @@ class ThemedKeyboardStyleService: KeyboardStyle.StandardStyleService {
 class KeyboardViewController: KeyboardInputViewController {
 
     override func viewWillSetupKeyboardView() {
-        let theme = ThemeStore.loadActiveTheme()
+        // Prefer the Keychain-backed theme; fall back to the (likely empty,
+        // under sideloading) App Group one, then the built-in default.
+        let theme: KeyboardThemeModel = {
+            if let json = KeychainStore.read(service: KeychainStore.themeService),
+               let data = json.data(using: .utf8),
+               let decoded = try? JSONDecoder().decode(KeyboardThemeModel.self, from: data) {
+                return decoded
+            }
+            return ThemeStore.loadActiveTheme()
+        }()
 
         // Swap in our theme-aware style service before the keyboard view
         // is built for this session.
@@ -196,14 +289,18 @@ class KeyboardViewController: KeyboardInputViewController {
                     // Tap into any text field with this build installed and
                     // read what this says; it tells us exactly which stage
                     // of the read pipeline is failing.
-                    Text(ThemeStore.debugStatus())
+                    // Red: old App Group channel (kept as a reference point -
+                    // expected to keep saying "no stored value" under
+                    // sideloading; remove once Keychain is confirmed working).
+                    Text("[App Group] " + ThemeStore.debugStatus())
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.white)
                         .padding(4)
                         .frame(maxWidth: .infinity)
                         .background(Color.red)
 
-                    Text(ThemeStore.writeCanaryAndReadApps())
+                    // Blue: new Keychain Sharing channel.
+                    Text("[Keychain] " + KeychainStore.debugStatusLine())
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.white)
                         .padding(4)

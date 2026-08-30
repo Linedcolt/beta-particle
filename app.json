@@ -12,6 +12,9 @@
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.Linedcolt.kbappv2"
+        ],
+        "keychain-access-groups": [
+          "$(AppIdentifierPrefix)com.Linedcolt.kbappv2.shared"
         ]
       }
     },

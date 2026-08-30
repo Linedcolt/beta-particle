@@ -1,24 +1,50 @@
-import { ExtensionStorage } from "@bacons/apple-targets";
+import * as Keychain from "react-native-keychain";
 import { KeyboardTheme } from "./types";
 import { DEFAULT_THEME } from "./defaultTheme";
 
-// Must exactly match:
-//  - app.json -> expo.ios.entitlements["com.apple.security.application-groups"][0]
-//  - targets/keyboard/expo-target.config.js entitlements mirror
-export const APP_GROUP = "group.com.Linedcolt.kbappv2";
+// --- Switched from App Groups to Keychain Sharing ---
+//
+// App Groups (com.apple.security.application-groups) turned out not to be
+// actually shared between this app and the keyboard extension under
+// AltStore/SideStore free-account sideloading - confirmed with a canary
+// test (see git history for the old ExtensionStorage-based version).
+//
+// Keychain Sharing is a different mechanism: it doesn't require a
+// capability to be registered server-side in the Apple Developer portal,
+// just a matching "keychain-access-groups" entitlement on both targets
+// (see app.json and targets/keyboard/expo-target.config.js), tied to your
+// Team ID. That gives it a real chance of working where App Groups didn't.
+//
+// We deliberately do NOT pass an explicit `accessGroup` option below. Each
+// target declares exactly ONE keychain-access-groups entry in its
+// entitlements, and when there's only one, iOS uses it as the default
+// automatically - so we never have to know or hardcode the literal,
+// Team-ID-resolved group string (which we can't predict at build time,
+// since this project archives unsigned and lets AltStore/SideStore do the
+// real signing). Both sides just have to agree on that being the *only*
+// group, which they do.
 
-const THEME_KEY = "activeTheme";
+const THEME_SERVICE = "com.Linedcolt.kbappv2.theme";
+const ACCOUNT = "value"; // constant; the Keychain API needs a username field, we don't use it
 
-const storage = new ExtensionStorage(APP_GROUP);
+async function keychainSet(service: string, value: string): Promise<void> {
+  await Keychain.setGenericPassword(ACCOUNT, value, { service });
+}
+
+async function keychainGet(service: string): Promise<string | null> {
+  const result = await Keychain.getGenericPassword({ service });
+  if (!result) return null;
+  return result.password;
+}
 
 /** Persist a theme so the keyboard extension picks it up next time it's shown. */
-export function saveTheme(theme: KeyboardTheme): void {
-  storage.set(THEME_KEY, JSON.stringify(theme));
+export async function saveTheme(theme: KeyboardTheme): Promise<void> {
+  await keychainSet(THEME_SERVICE, JSON.stringify(theme));
 }
 
 /** Read the last-saved theme back into the RN app (e.g. to prefill the editor). */
-export function loadTheme(): KeyboardTheme {
-  const raw = storage.get(THEME_KEY);
+export async function loadTheme(): Promise<KeyboardTheme> {
+  const raw = await keychainGet(THEME_SERVICE);
   if (!raw) return DEFAULT_THEME;
   try {
     return { ...DEFAULT_THEME, ...JSON.parse(raw) };
@@ -27,33 +53,22 @@ export function loadTheme(): KeyboardTheme {
   }
 }
 
-// MARK: - App Group diagnostic (temporary)
+// MARK: - Keychain sharing canary (temporary)
 //
-// Proves, independent of the theme JSON, whether the app and the keyboard
-// extension are actually sharing the same UserDefaults container.
-//
-//  - APP writes CANARY_FROM_APP_KEY with a timestamp.
-//  - KEYBOARD (Swift) writes CANARY_FROM_KEYBOARD_KEY with a timestamp on
-//    every time it's shown, and displays whatever it reads under
-//    CANARY_FROM_APP_KEY in its debug banner.
-//  - The app reads CANARY_FROM_KEYBOARD_KEY back to see the reverse
-//    direction.
-//
-// If the app can write a canary but the keyboard's banner never shows it
-// (and/or the app never sees the keyboard's canary), the two processes are
-// not sharing a real container - this points at the AltStore/SideStore
-// re-signing step, not a bug in this JS/Swift code.
-const CANARY_FROM_APP_KEY = "canaryFromApp";
-const CANARY_FROM_KEYBOARD_KEY = "canaryFromKeyboard";
+// Same idea as the earlier App Group canary, just over the new channel:
+// proves whether the app and the keyboard extension are actually reading/
+// writing the same keychain, independent of the theme JSON itself.
+const APP_CANARY_SERVICE = "com.Linedcolt.kbappv2.canaryFromApp";
+const KEYBOARD_CANARY_SERVICE = "com.Linedcolt.kbappv2.canaryFromKeyboard";
 
 /** Call from the RN app to write a fresh canary; returns the stamp written. */
-export function writeAppCanary(): string {
+export async function writeAppCanary(): Promise<string> {
   const stamp = new Date().toISOString();
-  storage.set(CANARY_FROM_APP_KEY, stamp);
+  await keychainSet(APP_CANARY_SERVICE, stamp);
   return stamp;
 }
 
 /** Call from the RN app to see the last canary the keyboard extension wrote. */
-export function readKeyboardCanary(): string | null {
-  return storage.get(CANARY_FROM_KEYBOARD_KEY);
+export async function readKeyboardCanary(): Promise<string | null> {
+  return keychainGet(KEYBOARD_CANARY_SERVICE);
 }
