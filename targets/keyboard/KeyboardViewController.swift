@@ -120,7 +120,7 @@ class ThemedKeyboardStyleService: KeyboardStyle.StandardStyleService {
     override func buttonStyle(
         for action: KeyboardAction,
         isPressed: Bool
-    ) -> KeyboardStyle.Button {
+    ) -> Keyboard.ButtonStyle {
         var style = super.buttonStyle(for: action, isPressed: isPressed)
 
         let isSpecial: Bool = {
