@@ -51,7 +51,7 @@ struct KeyboardThemeModel: Codable {
 // Must use the exact same App Group id as app.json and
 // targets/keyboard/expo-target.config.js.
 enum ThemeStore {
-    static let appGroup = "group.com.Linedcolt.kbapp"
+    static let appGroup = "group.com.example.kbapp"
     static let themeKey = "activeTheme" // matches THEME_KEY in themeStorage.ts
 
     static func loadActiveTheme() -> KeyboardThemeModel {
@@ -77,28 +77,6 @@ extension UIColor {
             green: CGFloat((rgb & 0x00FF00) >> 8) / 255,
             blue: CGFloat(rgb & 0x0000FF) / 255,
             alpha: 1
-        )
-    }
-}
-
-// MARK: - KeyboardKit app definition
-//
-// NOTE: this is KeyboardKit's documented "KeyboardApp" setup pattern as of
-// the 8.x/9.x line (see https://keyboardkit.com/getting-started). KeyboardKit
-// ships frequent releases - if `KeyboardApp`, `keyboardAppValue`, or the
-// style-service hook names below don't match what Xcode's autocomplete shows
-// once this actually compiles, check the current "Getting started" +
-// "Styling" guides on keyboardkit.com and adjust. This file cannot be
-// compiled or type-checked outside of Xcode, so treat it as a strong
-// starting draft, not a guarantee.
-extension KeyboardApp {
-    static var app: KeyboardApp {
-        .init(
-            name: "kbapp",
-            // licenseKey is only required if you add KeyboardKit Pro later.
-            // Leave unset to stay on the free, MIT-core feature set.
-            appGroupId: ThemeStore.appGroup,
-            locales: [.english]
         )
     }
 }
@@ -145,11 +123,6 @@ class ThemedKeyboardStyleService: KeyboardStyle.StandardStyleService {
 
 class KeyboardViewController: KeyboardInputViewController {
 
-    override func viewDidLoad() {
-        keyboardAppValue = .app
-        super.viewDidLoad()
-    }
-
     override func viewWillSetupKeyboardView() {
         let theme = ThemeStore.loadActiveTheme()
 
@@ -163,9 +136,14 @@ class KeyboardViewController: KeyboardInputViewController {
         setupKeyboardView { [weak self] controller in
             guard let self else { return AnyView(EmptyView()) }
             return AnyView(
-                SystemKeyboard(
+                KeyboardView(
                     state: self.state,
-                    services: self.services
+                    services: self.services,
+                    buttonContent: { $0.view },
+                    buttonView: { $0.view },
+                    collapsedView: { $0.view },
+                    emojiKeyboard: { $0.view },
+                    toolbar: { $0.view }
                 )
                 .background(Color(UIColor(hex: theme.colors.background)))
             )
