@@ -9,8 +9,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { KeyboardTheme } from "../theme/types";
-import { DEFAULT_THEME } from "../theme/defaultTheme";
-import { saveTheme } from "../theme/themeStorage";
+import { saveTheme, loadTheme } from "../theme/themeStorage";
 
 const HEIGHT_OPTIONS: KeyboardTheme["layout"]["keyboardHeight"][] = [
   "compact",
@@ -19,7 +18,10 @@ const HEIGHT_OPTIONS: KeyboardTheme["layout"]["keyboardHeight"][] = [
 ];
 
 export default function ThemeEditorScreen() {
-  const [theme, setTheme] = useState<KeyboardTheme>(DEFAULT_THEME);
+  // Initialize from whatever was last saved (falls back to DEFAULT_THEME
+  // internally if nothing has been saved yet), so re-entering the app
+  // shows your actual current theme instead of resetting the form.
+  const [theme, setTheme] = useState<KeyboardTheme>(() => loadTheme());
   const [savedAt, setSavedAt] = useState<string | null>(null);
 
   const setColor = (key: keyof KeyboardTheme["colors"], value: string) =>
