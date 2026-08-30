@@ -1,0 +1,74 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    # macOS 15 (Sequoia) ships Xcode 16+, which @bacons/apple-targets
+    # requires. If a future Xcode/SDK bump is needed, try `macos-latest`.
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Print Xcode version (debug aid)
+        run: xcodebuild -version
+
+      - name: Expo prebuild (generate ios/ project, skip pod install for now)
+        run: npx expo prebuild -p ios --no-install
+
+      - name: Install CocoaPods dependencies
+        working-directory: ios
+        run: pod install --repo-update
+
+      - name: Install xcodeproj gem
+        run: gem install xcodeproj --no-document
+
+      - name: Link KeyboardKit via Swift Package Manager
+        run: ruby scripts/add_swift_packages.rb
+
+      - name: Resolve Swift Package dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project ios/kbapp.xcodeproj \
+            -scheme kbapp
+
+      - name: List available schemes (debug aid)
+        run: xcodebuild -list -project ios/kbapp.xcodeproj
+
+      - name: Archive (unsigned)
+        # Deliberately not piping through xcpretty or similar - you can't
+        # reproduce this build locally without a Mac, so keep the raw,
+        # complete xcodebuild output in the CI logs for debugging.
+        run: |
+          mkdir -p build
+          xcodebuild archive \
+            -project ios/kbapp.xcodeproj \
+            -scheme kbapp \
+            -sdk iphoneos \
+            -configuration Release \
+            -archivePath "$PWD/build/kbapp.xcarchive" \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM=""
+
+      - name: Package .ipa (ad-hoc signed so AltStore/SideStore can re-sign)
+        run: bash scripts/package_ipa.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kbapp-ipa
+          path: build/kbapp-unsigned.ipa
+          if-no-files-found: error
