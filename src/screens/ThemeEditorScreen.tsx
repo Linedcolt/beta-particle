@@ -9,7 +9,12 @@ import {
   StyleSheet,
 } from "react-native";
 import { KeyboardTheme } from "../theme/types";
-import { saveTheme, loadTheme } from "../theme/themeStorage";
+import {
+  saveTheme,
+  loadTheme,
+  writeAppCanary,
+  readKeyboardCanary,
+} from "../theme/themeStorage";
 
 const HEIGHT_OPTIONS: KeyboardTheme["layout"]["keyboardHeight"][] = [
   "compact",
@@ -23,6 +28,15 @@ export default function ThemeEditorScreen() {
   // shows your actual current theme instead of resetting the form.
   const [theme, setTheme] = useState<KeyboardTheme>(() => loadTheme());
   const [savedAt, setSavedAt] = useState<string | null>(null);
+
+  // --- TEMPORARY: App Group sharing diagnostic ---
+  const [appCanary, setAppCanary] = useState<string | null>(null);
+  const [keyboardCanary, setKeyboardCanary] = useState<string | null>(null);
+
+  const runCanaryTest = () => {
+    setAppCanary(writeAppCanary());
+    setKeyboardCanary(readKeyboardCanary());
+  };
 
   const setColor = (key: keyof KeyboardTheme["colors"], value: string) =>
     setTheme((t) => ({ ...t, colors: { ...t.colors, [key]: value } }));
@@ -126,6 +140,27 @@ export default function ThemeEditorScreen() {
         After saving, close and reopen the keyboard (switch apps or dismiss the
         keyboard and tap back into a text field) to see the new theme applied.
       </Text>
+
+      {/* --- TEMPORARY: App Group sharing diagnostic --- */}
+      <View style={styles.debugBox}>
+        <Text style={styles.h2}>App Group sharing test</Text>
+        <Text style={styles.hint}>
+          1. Tap the button below. 2. Switch to the keyboard (tap into any
+          text field, choose this keyboard). Its red debug banner should show
+          "app canary: {"<the stamp below>"}". 3. Come back here and tap the
+          button again - "Keyboard canary" should show a recent timestamp
+          the keyboard wrote when it last appeared.
+        </Text>
+        <Pressable style={styles.saveButton} onPress={runCanaryTest}>
+          <Text style={styles.saveButtonText}>Run App Group test</Text>
+        </Pressable>
+        <Text style={styles.savedNote}>
+          App wrote: {appCanary ?? "(tap the button)"}
+        </Text>
+        <Text style={styles.savedNote}>
+          Keyboard last wrote: {keyboardCanary ?? "(nothing seen yet)"}
+        </Text>
+      </View>
     </ScrollView>
   );
 }
@@ -191,4 +226,12 @@ const styles = StyleSheet.create({
   saveButtonText: { color: "white", fontWeight: "600", fontSize: 16 },
   savedNote: { textAlign: "center", marginTop: 8, color: "#666" },
   hint: { marginTop: 16, color: "#888", fontSize: 12, lineHeight: 18 },
+  debugBox: {
+    marginTop: 32,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e33",
+    backgroundColor: "#fee",
+  },
 });

@@ -99,6 +99,26 @@ enum ThemeStore {
             return "decode failed: \(error) | raw: \(json.prefix(120))"
         }
     }
+
+    // MARK: - App Group sharing canary (temporary)
+    //
+    // Independent of the theme JSON entirely: proves whether this process
+    // and the RN app process are actually reading/writing the same
+    // physical UserDefaults container.
+    //
+    // Called every time the keyboard is shown. Writes a timestamp under
+    // "canaryFromKeyboard" (the app can read this via readKeyboardCanary()
+    // in themeStorage.ts), and reads back whatever the app last wrote under
+    // "canaryFromApp" (written via writeAppCanary() in the RN app).
+    static func writeCanaryAndReadApps() -> String {
+        guard let defaults = UserDefaults(suiteName: appGroup) else {
+            return "no app group"
+        }
+        let formatter = ISO8601DateFormatter()
+        defaults.set(formatter.string(from: Date()), forKey: "canaryFromKeyboard")
+        let appCanary = defaults.string(forKey: "canaryFromApp") ?? "(nothing from app yet)"
+        return "app canary: \(appCanary)"
+    }
 }
 
 extension UIColor {
@@ -182,6 +202,13 @@ class KeyboardViewController: KeyboardInputViewController {
                         .padding(4)
                         .frame(maxWidth: .infinity)
                         .background(Color.red)
+
+                    Text(ThemeStore.writeCanaryAndReadApps())
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(4)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.blue)
 
                     KeyboardView(
                         state: self.state,

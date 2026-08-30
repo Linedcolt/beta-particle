@@ -26,3 +26,34 @@ export function loadTheme(): KeyboardTheme {
     return DEFAULT_THEME;
   }
 }
+
+// MARK: - App Group diagnostic (temporary)
+//
+// Proves, independent of the theme JSON, whether the app and the keyboard
+// extension are actually sharing the same UserDefaults container.
+//
+//  - APP writes CANARY_FROM_APP_KEY with a timestamp.
+//  - KEYBOARD (Swift) writes CANARY_FROM_KEYBOARD_KEY with a timestamp on
+//    every time it's shown, and displays whatever it reads under
+//    CANARY_FROM_APP_KEY in its debug banner.
+//  - The app reads CANARY_FROM_KEYBOARD_KEY back to see the reverse
+//    direction.
+//
+// If the app can write a canary but the keyboard's banner never shows it
+// (and/or the app never sees the keyboard's canary), the two processes are
+// not sharing a real container - this points at the AltStore/SideStore
+// re-signing step, not a bug in this JS/Swift code.
+const CANARY_FROM_APP_KEY = "canaryFromApp";
+const CANARY_FROM_KEYBOARD_KEY = "canaryFromKeyboard";
+
+/** Call from the RN app to write a fresh canary; returns the stamp written. */
+export function writeAppCanary(): string {
+  const stamp = new Date().toISOString();
+  storage.set(CANARY_FROM_APP_KEY, stamp);
+  return stamp;
+}
+
+/** Call from the RN app to see the last canary the keyboard extension wrote. */
+export function readKeyboardCanary(): string | null {
+  return storage.get(CANARY_FROM_KEYBOARD_KEY);
+}
