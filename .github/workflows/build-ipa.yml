@@ -40,20 +40,28 @@ jobs:
       - name: Resolve Swift Package dependencies
         run: |
           xcodebuild -resolvePackageDependencies \
-            -project ios/kbapp.xcodeproj \
+            -workspace ios/kbapp.xcworkspace \
             -scheme kbapp
 
       - name: List available schemes (debug aid)
-        run: xcodebuild -list -project ios/kbapp.xcodeproj
+        run: xcodebuild -list -workspace ios/kbapp.xcworkspace
 
       - name: Archive (unsigned)
         # Deliberately not piping through xcpretty or similar - you can't
         # reproduce this build locally without a Mac, so keep the raw,
         # complete xcodebuild output in the CI logs for debugging.
+        #
+        # IMPORTANT: build the .xcworkspace, not the bare .xcodeproj.
+        # CocoaPods (which provides all the Expo/React Native modules)
+        # integrates via a separate Pods.xcodeproj that's only wired in
+        # through the .xcworkspace pod install generates. Building the bare
+        # .xcodeproj skips Pods.xcodeproj entirely, so none of its module
+        # maps get built - which surfaces as "no such module 'Expo'" even
+        # though pod install ran successfully earlier in this job.
         run: |
           mkdir -p build
           xcodebuild archive \
-            -project ios/kbapp.xcodeproj \
+            -workspace ios/kbapp.xcworkspace \
             -scheme kbapp \
             -sdk iphoneos \
             -configuration Release \
