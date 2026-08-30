@@ -64,6 +64,41 @@ enum ThemeStore {
         }
         return (try? JSONDecoder().decode(KeyboardThemeModel.self, from: data)) ?? .fallback
     }
+
+    // TEMPORARY DIAGNOSTIC — remove once theming is confirmed working.
+    // Reports exactly where the read pipeline is failing, since a silent
+    // `.fallback` gives no signal on *why* it fell back:
+    //  - "no app group" -> UserDefaults(suiteName:) itself returned nil.
+    //    This means the App Group entitlement isn't actually active for
+    //    this signed/installed build (common after re-signing via
+    //    AltStore/SideStore if the App Group wasn't included in the
+    //    profile they generated).
+    //  - "no stored value" -> the suite opened fine, but nothing has ever
+    //    been written under this key from this exact installed app group
+    //    (e.g. the main app and the keyboard ended up with two different
+    //    app group containers, or nothing was saved yet).
+    //  - "decode failed: <raw>" -> a string WAS found, but JSONDecoder
+    //    couldn't turn it into KeyboardThemeModel. Shows the raw string so
+    //    you can see whether it's malformed, truncated, or shaped
+    //    differently than the Swift struct expects.
+    //  - "ok: <name>" -> everything worked; shows the theme's `name` field.
+    static func debugStatus() -> String {
+        guard let defaults = UserDefaults(suiteName: appGroup) else {
+            return "no app group"
+        }
+        guard let json = defaults.string(forKey: themeKey) else {
+            return "no stored value"
+        }
+        guard let data = json.data(using: .utf8) else {
+            return "decode failed: (bad utf8) \(json.prefix(80))"
+        }
+        do {
+            let decoded = try JSONDecoder().decode(KeyboardThemeModel.self, from: data)
+            return "ok: \(decoded.name)"
+        } catch {
+            return "decode failed: \(error) | raw: \(json.prefix(120))"
+        }
+    }
 }
 
 extension UIColor {
@@ -136,15 +171,28 @@ class KeyboardViewController: KeyboardInputViewController {
         setupKeyboardView { [weak self] controller in
             guard let self else { return AnyView(EmptyView()) }
             return AnyView(
-                KeyboardView(
-                    state: self.state,
-                    services: self.services,
-                    buttonContent: { $0.view },
-                    buttonView: { $0.view },
-                    collapsedView: { $0.view },
-                    emojiKeyboard: { $0.view },
-                    toolbar: { $0.view }
-                )
+                VStack(spacing: 0) {
+                    // TEMPORARY DIAGNOSTIC BANNER — remove once theming works.
+                    // Tap into any text field with this build installed and
+                    // read what this says; it tells us exactly which stage
+                    // of the read pipeline is failing.
+                    Text(ThemeStore.debugStatus())
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(4)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.red)
+
+                    KeyboardView(
+                        state: self.state,
+                        services: self.services,
+                        buttonContent: { $0.view },
+                        buttonView: { $0.view },
+                        collapsedView: { $0.view },
+                        emojiKeyboard: { $0.view },
+                        toolbar: { $0.view }
+                    )
+                }
                 .background(Color(UIColor(hex: theme.colors.background)))
             )
         }
