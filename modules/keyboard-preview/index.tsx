@@ -1,5 +1,5 @@
 import * as React from "react";
-import { requireNativeViewManager } from "expo-modules-core";
+import { requireNativeComponent } from "react-native";
 import type { ViewProps } from "react-native";
 
 export type KeyboardPreviewViewProps = ViewProps & {
@@ -10,8 +10,14 @@ export type KeyboardPreviewViewProps = ViewProps & {
   themeJSON: string;
 };
 
+// This is a plain RCTViewManager-backed native component (registered in
+// modules/keyboard-preview/ios/KeyboardPreviewManager.m), not an Expo
+// Modules view - see the big comment in KeyboardPreviewManager.swift for
+// why. requireNativeComponent looks up the class by the JS-visible name
+// RCTViewManager derives from KeyboardPreviewManager (drops the "Manager"
+// suffix), which is why this string is "KeyboardPreview".
 const NativeKeyboardPreviewView =
-  requireNativeViewManager<KeyboardPreviewViewProps>("KeyboardPreview");
+  requireNativeComponent<KeyboardPreviewViewProps>("KeyboardPreview");
 
 /**
  * Renders the ACTUAL KeyboardKit KeyboardView (same Swift code path as the

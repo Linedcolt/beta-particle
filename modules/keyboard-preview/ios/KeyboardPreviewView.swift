@@ -1,24 +1,28 @@
-import ExpoModulesCore
 import SwiftUI
+import UIKit
 
 // Bridges the real SwiftUI KeyboardView into React Native.
 //
-// Expo's own Modules API docs (as of writing) don't yet have first-class
-// SwiftUI view support - the documented approach is exactly this: a
-// UIHostingController whose .view gets added as a plain subview. We don't
-// do full UIViewController containment (addChild/didMove) here since this
-// view has no navigation or appearance-transition needs of its own, just
-// rendering - that's the accepted shape for this use case, not a shortcut
-// specific to this project.
-class KeyboardPreviewView: ExpoView {
+// This used to subclass ExpoView (ExpoModulesCore). It's now a plain UIView
+// so it can be registered through a plain RCTViewManager instead - see
+// KeyboardPreviewManager.swift for why. The UIHostingController wrapping
+// approach itself is unchanged: Expo's own Modules API docs don't have
+// first-class SwiftUI view support either, so a UIHostingController whose
+// .view gets added as a plain subview was already the right shape, not a
+// shortcut specific to this project.
+class KeyboardPreviewView: UIView {
     private let hostingController = UIHostingController(
         rootView: KeyboardPreviewContent(theme: .fallback)
     )
 
-    required init(appContext: AppContext? = nil) {
-        super.init(appContext: appContext)
+    override init(frame: CGRect) {
+        super.init(frame: frame)
         hostingController.view.backgroundColor = .clear
         addSubview(hostingController.view)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 
     override func layoutSubviews() {
@@ -26,14 +30,19 @@ class KeyboardPreviewView: ExpoView {
         hostingController.view.frame = bounds
     }
 
-    /// Called from KeyboardPreviewModule's "themeJSON" prop setter whenever
-    /// the RN side pushes a new theme (e.g. the person drags a color field
-    /// or flips a corner-radius preset in ThemeEditorScreen).
-    func setThemeJSON(_ json: String) {
-        guard
-            let data = json.data(using: .utf8),
-            let theme = try? JSONDecoder().decode(KeyboardThemeModel.self, from: data)
-        else { return }
-        hostingController.rootView = KeyboardPreviewContent(theme: theme)
+    /// Set via RCT_EXPORT_VIEW_PROPERTY(themeJSON, NSString) in
+    /// KeyboardPreviewManager.m, using the React Native property-setter
+    /// convention (an `@objc dynamic` property named to match the JS prop).
+    /// Called whenever the RN side pushes a new theme (e.g. the person
+    /// drags a color field or flips a corner-radius preset in
+    /// ThemeEditorScreen.tsx).
+    @objc dynamic var themeJSON: NSString = "" {
+        didSet {
+            guard
+                let data = (themeJSON as String).data(using: .utf8),
+                let theme = try? JSONDecoder().decode(KeyboardThemeModel.self, from: data)
+            else { return }
+            hostingController.rootView = KeyboardPreviewContent(theme: theme)
+        }
     }
 }

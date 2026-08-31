@@ -16,9 +16,14 @@ src/screens/ThemeEditorScreen.tsx   Color/layout editor with a JS preview
 targets/keyboard/                The iOS Custom Keyboard Extension target
   expo-target.config.js            Target config for @bacons/apple-targets
   KeyboardViewController.swift     KeyboardKit setup + theme application
+modules/keyboard-preview/        Native "live keyboard preview" view for the
+                                  theme editor screen (see "Why keyboard-preview
+                                  isn't an Expo Module" below)
 scripts/
   add_swift_packages.rb            Links KeyboardKit via SPM into the Xcode
-                                    project (see "The one risky part" below)
+                                    project AND compiles modules/keyboard-preview
+                                    into the app target (see "The one risky
+                                    part" below)
   package_ipa.sh                   Archives -> ad-hoc signs -> zips the .ipa
 .github/workflows/build-ipa.yml  The CI pipeline
 ```
@@ -95,6 +100,40 @@ limited to 3 sideloaded apps at a time unless you add
 [LiveContainer](https://github.com/LiveContainer/LiveContainer) to get
 around that limit.
 
+## Why keyboard-preview isn't an Expo Module
+
+`modules/keyboard-preview` renders the live theme preview on
+`ThemeEditorScreen`. It used to be scaffolded as a local Expo Module (an
+`ExpoModulesCore` `Module { View(...) }` definition meant to be autolinked
+as its own CocoaPods pod). That never worked - the module had no
+`.podspec`, so `pod install` never created a pod for it, and the app
+crashed at runtime with `Unimplemented component: <ViewManagerAdapter_KeyboardPreview>`.
+
+Adding the missing podspec wouldn't have fixed it either. KeyboardKit is
+linked as a Swift Package Manager dependency straight onto the `kbapp` and
+`keyboard` Xcode targets (see the section below) - it is **not** a
+CocoaPods dependency. A separately-compiled pod lives in its own
+`Pods.xcodeproj` and has no visibility into an SPM package linked onto a
+target in the app's own `.xcodeproj`, so `import KeyboardKit` inside a pod
+would never compile, podspec or not.
+
+So `modules/keyboard-preview/ios` is now a plain `RCTViewManager` (Swift +
+a small Objective-C shim, since `RCT_EXTERN_MODULE` has no Swift
+equivalent), and `scripts/add_swift_packages.rb` compiles those files
+directly into the `kbapp` target's Sources build phase - the same target
+KeyboardKit is linked onto - right after it links KeyboardKit. The JS side
+uses React Native's own `requireNativeComponent` instead of Expo's
+`requireNativeViewManager`, since this view is no longer an Expo Module at
+all. Fabric's "interop layer" picks up plain `RCTViewManager`s like this
+one automatically, without needing Codegen.
+
+Like the SPM linking step, I could not compile this for real without a Mac
+- see "The one risky part" below, which now covers this step too. If the
+theme editor still shows "Unimplemented component" after this change,
+check the "Link KeyboardKit via Swift Package Manager" CI step's log for a
+line like `Compiled KeyboardPreviewContent.swift, ... into kbapp's Sources
+build phase` to confirm the script actually found and added the files.
+
 ## The one risky part: linking KeyboardKit via SPM
 
 `@bacons/apple-targets` (the plugin that generates the keyboard extension
@@ -124,6 +163,15 @@ at **Archive (unsigned)** with something like:
 - Anything about `XCRemoteSwiftPackageReference` / `XCSwiftPackageProductDependency`
   serialization -> likely an `xcodeproj` gem version quirk; try pinning an
   older/newer `xcodeproj` version in the "Install xcodeproj gem" step.
+- `no such module 'KeyboardKit'` while compiling `KeyboardPreviewContent.swift`
+  specifically (as opposed to `KeyboardViewController.swift`) -> the script's
+  `add_keyboard_preview_sources` step added the files to a target other than
+  `kbapp`, or ran before the KeyboardKit link step for that target. Check
+  the log line for which target the files were compiled into.
+- Duplicate symbol errors mentioning `KeyboardPreviewManager` -> the script
+  ran twice against the same `ios/` checkout (e.g. a retried step) without
+  `expo prebuild` regenerating it fresh first; re-run prebuild before
+  re-running this script.
 
 **Debugging without owning a Mac:** you can get an interactive shell on a
 real macOS GitHub Actions runner using
