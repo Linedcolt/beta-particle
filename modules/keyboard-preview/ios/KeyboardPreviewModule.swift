@@ -1,7 +1,7 @@
-import ExpoModulesCore
+internal import ExpoModulesCore
 
-public class KeyboardPreviewModule: Module {
-    public func definition() -> ModuleDefinition {
+class KeyboardPreviewModule: Module {
+    func definition() -> ModuleDefinition {
         Name("KeyboardPreview")
 
         View(KeyboardPreviewView.self) {
