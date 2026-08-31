@@ -40,11 +40,11 @@ jobs:
       - name: Resolve Swift Package dependencies
         run: |
           xcodebuild -resolvePackageDependencies \
-            -workspace ios/kbapp.xcworkspace \
-            -scheme kbapp
+            -workspace ios/BetaParticle.xcworkspace \
+            -scheme BetaParticle
 
       - name: List available schemes (debug aid)
-        run: xcodebuild -list -workspace ios/kbapp.xcworkspace
+        run: xcodebuild -list -workspace ios/BetaParticle.xcworkspace
 
       - name: Archive (unsigned)
         # Deliberately not piping through xcpretty or similar - you can't
@@ -61,11 +61,11 @@ jobs:
         run: |
           mkdir -p build
           xcodebuild archive \
-            -workspace ios/kbapp.xcworkspace \
-            -scheme kbapp \
+            -workspace ios/BetaParticle.xcworkspace \
+            -scheme BetaParticle \
             -sdk iphoneos \
             -configuration Release \
-            -archivePath "$PWD/build/kbapp.xcarchive" \
+            -archivePath "$PWD/build/BetaParticle.xcarchive" \
             -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -77,6 +77,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: kbapp-ipa
-          path: build/kbapp-unsigned.ipa
+          name: BetaParticle-ipa
+          path: build/BetaParticle-unsigned.ipa
           if-no-files-found: error

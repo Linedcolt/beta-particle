@@ -24,7 +24,7 @@
 # approach) lives in its own Pods.xcodeproj and can never see an SPM
 # package linked onto a target in *this* project, so it could never have
 # compiled `import KeyboardKit` even with a correct podspec. Compiling
-# these files straight into the `kbapp` target - the same place KeyboardKit
+# these files straight into the `BetaParticle` target - the same place KeyboardKit
 # is linked - is what actually makes that import resolve. See the comment
 # in modules/keyboard-preview/ios/KeyboardPreviewManager.swift for the full
 # story.
@@ -34,7 +34,7 @@ require "xcodeproj"
 PROJECT_GLOB = Dir.glob("ios/*.xcodeproj").first
 raise "No .xcodeproj found under ./ios - did `expo prebuild -p ios` run first?" unless PROJECT_GLOB
 
-APP_TARGET_NAME = ENV.fetch("APP_TARGET_NAME", "kbapp")
+APP_TARGET_NAME = ENV.fetch("APP_TARGET_NAME", "BetaParticle")
 KEYBOARD_TARGET_NAME = ENV.fetch("KEYBOARD_TARGET_NAME", "keyboard")
 
 KEYBOARDKIT_URL = "https://github.com/KeyboardKit/KeyboardKit"

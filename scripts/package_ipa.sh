@@ -12,7 +12,7 @@
 # keyboard.appex is signed first, then the containing .app.
 set -euo pipefail
 
-APP_NAME="kbapp"
+APP_NAME="BetaParticle"
 ARCHIVE_PATH="build/${APP_NAME}.xcarchive"
 APP_PATH="${ARCHIVE_PATH}/Products/Applications/${APP_NAME}.app"
 PAYLOAD_DIR="build/Payload"
