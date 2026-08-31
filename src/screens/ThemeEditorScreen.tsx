@@ -11,21 +11,13 @@ import {
 import { KeyboardTheme } from "../theme/types";
 import { DEFAULT_THEME } from "../theme/defaultTheme";
 import { saveTheme, loadTheme } from "../theme/themeStorage";
+import KeyboardPreviewView from "../../modules/keyboard-preview";
 
 const HEIGHT_OPTIONS: KeyboardTheme["layout"]["keyboardHeight"][] = [
   "compact",
   "regular",
   "tall",
 ];
-
-// Matches the height values a real KeyboardKit row renders at roughly
-// closely enough for theme-checking purposes. If these ever look off next
-// to a real device, adjust here - they don't feed into the extension.
-const ROW_HEIGHT: Record<KeyboardTheme["layout"]["keyboardHeight"], number> = {
-  compact: 34,
-  regular: 42,
-  tall: 50,
-};
 
 const CORNER_OPTIONS: { label: string; value: number }[] = [
   { label: "Square", value: 0 },
@@ -34,41 +26,18 @@ const CORNER_OPTIONS: { label: string; value: number }[] = [
   { label: "Pill", value: 1 },
 ];
 
-const KEY_GAP = 5;
-
-// --- Standard QWERTY layout, purely for previewing theme/layout values ---
-// This intentionally mirrors the row shape KeyboardKit's standard iPhone
-// layout renders (including row 2's half-key indent), so the preview's
-// proportions read the same as the real keyboard. It is NOT the actual
-// layout engine - once layouts become user-configurable (remapping, custom
-// shapes), this needs to be swapped for whatever renders the real
-// KeyboardLayoutConfig instead of this hardcoded shape.
-type PreviewKey =
-  | { id: string; label: string; flex: number; special: boolean }
-  | { id: string; flex: number; spacer: true };
-
-const letterRow = (letters: string[]): PreviewKey[] =>
-  letters.map((l) => ({ id: l, label: l, flex: 1, special: false }));
-
-const PREVIEW_ROWS: PreviewKey[][] = [
-  letterRow(["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"]),
-  [
-    { id: "l-spacer", flex: 0.5, spacer: true },
-    ...letterRow(["a", "s", "d", "f", "g", "h", "j", "k", "l"]),
-    { id: "r-spacer", flex: 0.5, spacer: true },
-  ],
-  [
-    { id: "shift", label: "⇧", flex: 1.5, special: true },
-    ...letterRow(["z", "x", "c", "v", "b", "n", "m"]),
-    { id: "backspace", label: "⌫", flex: 1.5, special: true },
-  ],
-  [
-    { id: "123", label: "123", flex: 1.4, special: true },
-    { id: "globe", label: "\u{1F310}", flex: 1, special: true },
-    { id: "space", label: "space", flex: 5, special: true },
-    { id: "return", label: "return", flex: 1.6, special: true },
-  ],
-];
+// This is now the ONE hand-guessed number left in the whole preview
+// pipeline - everything drawn inside this box comes straight from
+// KeyboardKit's real layout math (see modules/keyboard-preview), but RN's
+// Yoga layout still needs an explicit height for the native view, and
+// KeyboardKit doesn't report its intrinsic size back across the bridge
+// (yet). If the preview looks clipped or floaty on your device, adjust
+// these - they don't affect anything the extension actually renders with.
+const PREVIEW_HEIGHT: Record<KeyboardTheme["layout"]["keyboardHeight"], number> = {
+  compact: 220,
+  regular: 260,
+  tall: 300,
+};
 
 export default function ThemeEditorScreen() {
   // Keychain access is async, so we can't load synchronously in useState
@@ -76,9 +45,6 @@ export default function ThemeEditorScreen() {
   // and swap in the real saved theme once it's loaded.
   const [theme, setTheme] = useState<KeyboardTheme>(DEFAULT_THEME);
   const [savedAt, setSavedAt] = useState<string | null>(null);
-  // Which preview key is currently held down, so the preview can show
-  // keyBackgroundPressed the same way the extension does.
-  const [pressedKey, setPressedKey] = useState<string | null>(null);
 
   useEffect(() => {
     loadTheme().then(setTheme);
@@ -95,73 +61,23 @@ export default function ThemeEditorScreen() {
     setSavedAt(new Date().toLocaleTimeString());
   };
 
-  // Same formula as ThemedKeyboardStyleService.buttonStyle in
-  // KeyboardViewController.swift (`CGFloat(theme.layout.keyCornerRadius) *
-  // 20`). Keep these in sync - it's the whole point of this preview.
-  const cornerRadius = theme.layout.keyCornerRadius * 20;
-  const rowHeight = ROW_HEIGHT[theme.layout.keyboardHeight];
-
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.h1}>Keyboard Theme Editor</Text>
 
       {/* --- Live preview ---
-          Renders from the same theme fields and the same style formula the
-          Swift extension uses (see ThemedKeyboardStyleService), and bleeds
-          edge-to-edge like a real docked keyboard rather than sitting in a
-          rounded card. Tap and hold any letter key to check
-          keyBackgroundPressed - matching the extension, special keys
-          (shift, backspace, 123, globe, space, return) intentionally do NOT
-          change color when pressed, since ThemedKeyboardStyleService only
-          swaps in keyBackgroundPressed for non-special actions today. */}
-      <View
-        style={[styles.previewWrap, { backgroundColor: theme.colors.background }]}
-      >
-        {PREVIEW_ROWS.map((row, i) => (
-          <View
-            key={i}
-            style={[styles.previewRow, i > 0 && { marginTop: KEY_GAP }]}
-          >
-            {row.map((key) =>
-              "spacer" in key ? (
-                <View key={key.id} style={{ flex: key.flex }} />
-              ) : (
-                <Pressable
-                  key={key.id}
-                  onPressIn={() => setPressedKey(key.id)}
-                  onPressOut={() =>
-                    setPressedKey((k) => (k === key.id ? null : k))
-                  }
-                  style={[
-                    styles.previewKey,
-                    {
-                      flex: key.flex,
-                      height: rowHeight,
-                      borderRadius: cornerRadius,
-                      backgroundColor: key.special
-                        ? theme.colors.specialKeyBackground
-                        : pressedKey === key.id
-                        ? theme.colors.keyBackgroundPressed
-                        : theme.colors.keyBackground,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.previewKeyText,
-                      { color: theme.colors.keyText },
-                      key.label.length > 2 && styles.previewKeyTextSmall,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {key.label}
-                  </Text>
-                </Pressable>
-              )
-            )}
-          </View>
-        ))}
-      </View>
+          This is the REAL KeyboardView (same Swift code path, same
+          ThemedKeyboardStyleService as the extension), rendered through a
+          native UIHostingController bridge - not a JS recreation. See
+          modules/keyboard-preview. Tap/hold keys to check
+          keyBackgroundPressed the same way the extension applies it. */}
+      <KeyboardPreviewView
+        themeJSON={JSON.stringify(theme)}
+        style={[
+          styles.previewWrap,
+          { height: PREVIEW_HEIGHT[theme.layout.keyboardHeight] },
+        ]}
+      />
 
       {/* --- Color fields --- */}
       {(Object.keys(theme.colors) as Array<keyof KeyboardTheme["colors"]>).map(
@@ -249,29 +165,10 @@ const styles = StyleSheet.create({
   h1: { fontSize: 22, fontWeight: "700", marginBottom: 16 },
   h2: { fontSize: 16, fontWeight: "600", marginTop: 16, marginBottom: 8 },
   // Bleeds past the ScrollView's own 20pt padding on both sides so the
-  // preview reaches the actual screen edges, like a docked keyboard does -
-  // rather than floating as a rounded card, which was misleading about how
-  // the background color actually reads in practice.
+  // preview reaches the actual screen edges, like a docked keyboard does.
   previewWrap: {
     marginHorizontal: -20,
-    paddingHorizontal: 3,
-    paddingTop: 8,
-    paddingBottom: 6,
     marginBottom: 8,
-  },
-  previewRow: {
-    flexDirection: "row",
-  },
-  previewKey: {
-    alignItems: "center",
-    justifyContent: "center",
-    marginHorizontal: KEY_GAP / 2,
-  },
-  previewKeyText: {
-    fontSize: 15,
-  },
-  previewKeyTextSmall: {
-    fontSize: 11,
   },
   row: {
     flexDirection: "row",

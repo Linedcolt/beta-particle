@@ -1,0 +1,9 @@
+{
+  "name": "keyboard-preview",
+  "version": "0.1.0",
+  "description": "Renders the real KeyboardKit KeyboardView + ThemedKeyboardStyleService inside the RN app, for a pixel-accurate theme preview. Local module, not published.",
+  "main": "index.tsx",
+  "types": "index.tsx",
+  "license": "UNLICENSED",
+  "private": true
+}
