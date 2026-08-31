@@ -18,6 +18,7 @@ import KeyboardKit
 // mockup.
 struct KeyboardPreviewContent: View {
     let theme: KeyboardThemeModel
+    var layoutConfig: KeyboardLayoutConfig = .empty
 
     var body: some View {
         let state = Keyboard.State()
@@ -25,6 +26,9 @@ struct KeyboardPreviewContent: View {
         services.styleService = ThemedKeyboardStyleService(
             theme: theme,
             keyboardContext: state.keyboardContext
+        )
+        services.layoutService = RemappableLayoutService(
+            layoutConfig: layoutConfig
         )
 
         return KeyboardView(

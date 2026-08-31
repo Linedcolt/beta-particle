@@ -37,12 +37,34 @@ class KeyboardPreviewView: UIView {
     /// drags a color field or flips a corner-radius preset in
     /// ThemeEditorScreen.tsx).
     @objc dynamic var themeJSON: NSString = "" {
-        didSet {
-            guard
-                let data = (themeJSON as String).data(using: .utf8),
-                let theme = try? JSONDecoder().decode(KeyboardThemeModel.self, from: data)
-            else { return }
-            hostingController.rootView = KeyboardPreviewContent(theme: theme)
+        didSet { rebuild() }
+    }
+
+    /// Same idea as themeJSON, for the layout overrides (see
+    /// LayoutOverrideEditor.tsx). A separate prop rather than folding into
+    /// themeJSON since theme and layout are independently saved/loaded on
+    /// the RN side (separate Keychain services) and change at different
+    /// times - keeping them separate props avoids re-decoding one every
+    /// time only the other changes.
+    @objc dynamic var layoutJSON: NSString = "" {
+        didSet { rebuild() }
+    }
+
+    private func rebuild() {
+        guard
+            let themeData = (themeJSON as String).data(using: .utf8),
+            let theme = try? JSONDecoder().decode(KeyboardThemeModel.self, from: themeData)
+        else { return }
+
+        var layoutConfig = KeyboardLayoutConfig.empty
+        if let layoutData = (layoutJSON as String).data(using: .utf8),
+           let decoded = try? JSONDecoder().decode(KeyboardLayoutConfig.self, from: layoutData) {
+            layoutConfig = decoded
         }
+
+        hostingController.rootView = KeyboardPreviewContent(
+            theme: theme,
+            layoutConfig: layoutConfig
+        )
     }
 }

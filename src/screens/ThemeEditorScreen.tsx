@@ -10,11 +10,14 @@ import {
 import { KeyboardTheme } from "../theme/types";
 import { DEFAULT_THEME } from "../theme/defaultTheme";
 import { saveTheme, loadTheme } from "../theme/themeStorage";
+import { KeyboardLayoutConfig, DEFAULT_LAYOUT_CONFIG } from "../theme/layoutTypes";
+import { saveLayoutConfig, loadLayoutConfig } from "../theme/layoutStorage";
 import KeyboardPreviewView from "../../modules/keyboard-preview";
 import Card from "../components/Card";
 import SegmentedControl from "../components/SegmentedControl";
 import ColorField from "../components/ColorField";
 import AnimatedPressable from "../components/AnimatedPressable";
+import LayoutOverrideEditor from "../components/LayoutOverrideEditor";
 
 const HEIGHT_OPTIONS: {
   label: string;
@@ -70,6 +73,7 @@ export default function ThemeEditorScreen() {
   // the way the old App-Group-backed version did. Start from the default
   // and swap in the real saved theme once it's loaded.
   const [theme, setTheme] = useState<KeyboardTheme>(DEFAULT_THEME);
+  const [layoutConfig, setLayoutConfig] = useState<KeyboardLayoutConfig>(DEFAULT_LAYOUT_CONFIG);
   const [saveState, setSaveState] = useState<"idle" | "saved">("idle");
 
   const entrance = useRef(new Animated.Value(0)).current;
@@ -77,6 +81,7 @@ export default function ThemeEditorScreen() {
 
   useEffect(() => {
     loadTheme().then(setTheme);
+    loadLayoutConfig().then(setLayoutConfig);
     Animated.timing(entrance, {
       toValue: 1,
       duration: 420,
@@ -91,7 +96,7 @@ export default function ThemeEditorScreen() {
     setTheme((t) => ({ ...t, layout: { ...t.layout, keyCornerRadius: value } }));
 
   const handleSave = async () => {
-    await saveTheme(theme);
+    await Promise.all([saveTheme(theme), saveLayoutConfig(layoutConfig)]);
     setSaveState("saved");
     savedOpacity.setValue(0);
     Animated.sequence([
@@ -153,6 +158,7 @@ export default function ThemeEditorScreen() {
         <View style={styles.previewSection}>
           <KeyboardPreviewView
             themeJSON={JSON.stringify(theme)}
+            layoutJSON={JSON.stringify(layoutConfig)}
             style={{ height: PREVIEW_HEIGHT[theme.layout.keyboardHeight] }}
           />
         </View>
@@ -192,6 +198,15 @@ export default function ThemeEditorScreen() {
         />
       </Card>
 
+      <SectionHeader title="Key remapping" accent={accent} />
+      <Card>
+        <LayoutOverrideEditor
+          overrides={layoutConfig.overrides}
+          onChange={(overrides) => setLayoutConfig((c) => ({ ...c, overrides }))}
+          accentColor={accent}
+        />
+      </Card>
+
       <SectionHeader title="Feedback" accent={accent} />
       <Card>
         <View style={styles.row}>
@@ -218,7 +233,7 @@ export default function ThemeEditorScreen() {
         onPress={handleSave}
       >
         <Text style={styles.saveButtonText}>
-          {saveState === "saved" ? "Saved" : "Save theme"}
+          {saveState === "saved" ? "Saved" : "Save changes"}
         </Text>
         <Animated.Text style={[styles.checkmark, { opacity: savedOpacity }]}>
           {"  \u2713"}
@@ -227,7 +242,8 @@ export default function ThemeEditorScreen() {
 
       <Text style={styles.hint}>
         After saving, close and reopen the keyboard (switch apps or dismiss the
-        keyboard and tap back into a text field) to see the new theme applied.
+        keyboard and tap back into a text field) to see the new theme and key
+        changes applied.
       </Text>
     </ScrollView>
   );

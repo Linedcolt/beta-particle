@@ -18,5 +18,6 @@
 @interface RCT_EXTERN_MODULE(KeyboardPreviewManager, RCTViewManager)
 
 RCT_EXPORT_VIEW_PROPERTY(themeJSON, NSString)
+RCT_EXPORT_VIEW_PROPERTY(layoutJSON, NSString)
 
 @end

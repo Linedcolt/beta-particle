@@ -83,8 +83,9 @@ enum ThemeStore {
 // iOS uses it as the default automatically for both add and query - so we
 // never need to know or hardcode the literal Team-ID-prefixed string here.
 enum KeychainStore {
-    // Must match the service name in themeStorage.ts exactly.
+    // Must match the service names in themeStorage.ts / layoutStorage.ts exactly.
     static let themeService = "com.Linedcolt.kbappv2.theme"
+    static let layoutService = "com.Linedcolt.kbappv2.layout"
     static let account = "value" // constant; matches ACCOUNT in themeStorage.ts
 
     static func read(service: String) -> String? {
@@ -209,6 +210,15 @@ class KeyboardViewController: KeyboardInputViewController {
         return ThemeStore.loadActiveTheme()
     }()
 
+    private lazy var activeLayoutConfig: KeyboardLayoutConfig = {
+        if let json = KeychainStore.read(service: KeychainStore.layoutService),
+           let data = json.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode(KeyboardLayoutConfig.self, from: data) {
+            return decoded
+        }
+        return .empty
+    }()
+
     override func viewDidLoad() {
         super.viewDidLoad()
         // Paint the extension's own root view immediately. This is what
@@ -227,6 +237,9 @@ class KeyboardViewController: KeyboardInputViewController {
         services.styleService = ThemedKeyboardStyleService(
             theme: theme,
             keyboardContext: state.keyboardContext
+        )
+        services.layoutService = RemappableLayoutService(
+            layoutConfig: activeLayoutConfig
         )
 
         setupKeyboardView { [weak self] controller in

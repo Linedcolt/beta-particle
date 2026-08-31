@@ -8,6 +8,13 @@ export type KeyboardPreviewViewProps = ViewProps & {
    * KeyboardThemeModel struct the extension uses. See src/theme/types.ts.
    */
   themeJSON: string;
+  /**
+   * JSON.stringify(layoutConfig) - decoded on the native side into the
+   * same KeyboardLayoutConfig struct the extension uses. See
+   * src/theme/layoutTypes.ts. Optional - omit or pass "{}" for no
+   * overrides.
+   */
+  layoutJSON?: string;
 };
 
 // This is a plain RCTViewManager-backed native component (registered in
