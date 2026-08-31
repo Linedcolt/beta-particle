@@ -182,17 +182,31 @@ class ThemedKeyboardStyleService: KeyboardStyle.StandardStyleService {
 
 class KeyboardViewController: KeyboardInputViewController {
 
+    // Resolve once per session so viewDidLoad (which runs before
+    // viewWillSetupKeyboardView) can also use it to paint the raw
+    // UIKit view - avoids a black/system-colored flash before the
+    // SwiftUI background lays out.
+    private lazy var activeTheme: KeyboardThemeModel = {
+        if let json = KeychainStore.read(service: KeychainStore.themeService),
+           let data = json.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode(KeyboardThemeModel.self, from: data) {
+            return decoded
+        }
+        return ThemeStore.loadActiveTheme()
+    }()
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        // Paint the extension's own root view immediately. This is what
+        // shows through in the areas outside our SwiftUI view's safe
+        // area (the strip above the key rows and the home-indicator
+        // strip below the bottom row) before .ignoresSafeArea() below
+        // takes over, and as a fallback if it ever doesn't.
+        view.backgroundColor = UIColor(hex: activeTheme.colors.background)
+    }
+
     override func viewWillSetupKeyboardView() {
-        // Prefer the Keychain-backed theme; fall back to the (likely empty,
-        // under sideloading) App Group one, then the built-in default.
-        let theme: KeyboardThemeModel = {
-            if let json = KeychainStore.read(service: KeychainStore.themeService),
-               let data = json.data(using: .utf8),
-               let decoded = try? JSONDecoder().decode(KeyboardThemeModel.self, from: data) {
-                return decoded
-            }
-            return ThemeStore.loadActiveTheme()
-        }()
+        let theme = activeTheme
 
         // Swap in our theme-aware style service before the keyboard view
         // is built for this session.
@@ -213,7 +227,16 @@ class KeyboardViewController: KeyboardInputViewController {
                     emojiKeyboard: { $0.view },
                     toolbar: { $0.view }
                 )
-                .background(Color(UIColor(hex: theme.colors.background)))
+                // .ignoresSafeArea() is the key fix: without it, SwiftUI's
+                // .background() stops at the safe-area edges, leaving the
+                // top inset (above the key rows) and bottom inset (home
+                // indicator area, where the globe/mic row sits) uncolored
+                // - so the blurred wallpaper behind the keyboard shows
+                // through there instead of your theme color.
+                .background(
+                    Color(UIColor(hex: theme.colors.background))
+                        .ignoresSafeArea()
+                )
             )
         }
     }
