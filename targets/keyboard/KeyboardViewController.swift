@@ -176,6 +176,20 @@ class ThemedKeyboardStyleService: KeyboardStyle.StandardStyleService {
         style.cornerRadius = CGFloat(theme.layout.keyCornerRadius) * 20
         return style
     }
+
+    // This is the actual lever KeyboardView uses to paint its own
+    // background - NOT a SwiftUI .background() wrapped around it from
+    // outside. KeyboardView renders `VStack { toolbar; keyRows }` and
+    // then applies `.background(styleService.backgroundStyle)` to that
+    // whole stack internally, so the toolbar strip above the keys (the
+    // "banner" area, sized for autocomplete suggestions - always
+    // reserved whether or not any suggestions are showing) only ever
+    // gets colored if we override this property. The base class default
+    // is `.standard`, which is fully transparent, so previously that
+    // strip fell through to the extension's raw (black) view background.
+    override var backgroundStyle: Keyboard.Background {
+        .color(Color(UIColor(hex: theme.colors.background)))
+    }
 }
 
 // MARK: - Controller
@@ -227,12 +241,13 @@ class KeyboardViewController: KeyboardInputViewController {
                     emojiKeyboard: { $0.view },
                     toolbar: { $0.view }
                 )
-                // .ignoresSafeArea() is the key fix: without it, SwiftUI's
-                // .background() stops at the safe-area edges, leaving the
-                // top inset (above the key rows) and bottom inset (home
-                // indicator area, where the globe/mic row sits) uncolored
-                // - so the blurred wallpaper behind the keyboard shows
-                // through there instead of your theme color.
+                // Secondary safety net only now - the real fix is
+                // ThemedKeyboardStyleService.backgroundStyle above, which
+                // is what KeyboardView actually paints internally. This
+                // outer .background().ignoresSafeArea() just catches any
+                // remaining edge (e.g. behind the collapsed-view button,
+                // or the home-indicator strip) that sits outside what
+                // KeyboardView itself lays out.
                 .background(
                     Color(UIColor(hex: theme.colors.background))
                         .ignoresSafeArea()
